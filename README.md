@@ -31,6 +31,17 @@ Each flag has a default and an ordered list of rules. Rules are checked
 top to bottom; the first one whose condition matches the given context
 wins. If nothing matches, the default applies.
 
+A rule's condition can combine comparisons with `and` and `or`, and use
+parentheses to group them:
+
+```
+rule: user.plan == enterprise and (env == staging or env == canary) -> on
+```
+
+`and` binds tighter than `or`, the same as most languages, so
+`a == 1 or b == 2 and c == 3` reads as `a == 1 or (b == 2 and c == 3)`.
+Use parentheses when you mean something else.
+
 ## Usage
 
 ```
@@ -61,9 +72,10 @@ offending line and a caret pointing at the exact character.
 
 ## Status
 
-This is a first pass: the parser and the `why` command work end to end,
-but the rule language is intentionally small (no `and`/`or`, no
-negation, no numeric comparisons). See the roadmap for what's next.
+This is a first pass: the parser and the `why` command work end to end.
+The rule language now supports `and`/`or` grouping but is still small
+(string equality only, no numeric or boolean comparisons, no negation).
+See the roadmap for what's next.
 
 ## Development
 

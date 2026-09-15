@@ -6,7 +6,7 @@ import argparse
 import difflib
 import sys
 
-from .parser import Flag, FlagFileError, Rule, parse_file
+from .parser import Flag, FlagFileError, parse_file
 
 
 def _parse_context(pairs) -> dict:
@@ -17,15 +17,6 @@ def _parse_context(pairs) -> dict:
         key, _, value = pair.partition("=")
         context[key.strip()] = value.strip()
     return context
-
-
-def _matches(rule: Rule, context: dict) -> bool:
-    actual = context.get(rule.key)
-    if actual is None:
-        return False
-    if rule.op == "==":
-        return actual == rule.value
-    return actual != rule.value
 
 
 def cmd_why(args) -> int:
@@ -50,7 +41,7 @@ def cmd_why(args) -> int:
     context = _parse_context(args.context)
 
     for rule in flag.rules:
-        if _matches(rule, context):
+        if rule.condition.evaluate(context):
             state = "on" if rule.result else "off"
             print(f"{args.flag} is {state}")
             print(f"  matched rule at {args.file}:{rule.line}: {rule.text}")
