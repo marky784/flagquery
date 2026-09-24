@@ -81,6 +81,39 @@ class ParseTests(unittest.TestCase):
             parse(text, source_name="test.flags")
         self.assertIn("line 1", ctx.exception.message)
 
+    def test_numeric_comparison(self):
+        text = "flag: x\ndefault: off\nrule: user.signup_days >= 30 -> on\n"
+        flags = parse(text, source_name="test.flags")
+        condition = flags["x"].rules[0].condition
+        self.assertEqual(condition, Comparison("user.signup_days", ">=", 30))
+        self.assertTrue(condition.evaluate({"user.signup_days": "45"}))
+        self.assertTrue(condition.evaluate({"user.signup_days": "30"}))
+        self.assertFalse(condition.evaluate({"user.signup_days": "29"}))
+        self.assertFalse(condition.evaluate({"user.signup_days": "not-a-number"}))
+
+    def test_float_comparison(self):
+        text = "flag: x\ndefault: off\nrule: error_rate < 0.5 -> on\n"
+        flags = parse(text, source_name="test.flags")
+        condition = flags["x"].rules[0].condition
+        self.assertTrue(condition.evaluate({"error_rate": "0.2"}))
+        self.assertFalse(condition.evaluate({"error_rate": "0.9"}))
+
+    def test_boolean_comparison(self):
+        text = "flag: x\ndefault: off\nrule: user.beta == true -> on\n"
+        flags = parse(text, source_name="test.flags")
+        condition = flags["x"].rules[0].condition
+        self.assertEqual(condition, Comparison("user.beta", "==", True))
+        self.assertTrue(condition.evaluate({"user.beta": "true"}))
+        self.assertFalse(condition.evaluate({"user.beta": "false"}))
+        self.assertFalse(condition.evaluate({"user.beta": "yes"}))
+
+    def test_relational_operator_requires_numeric_value(self):
+        text = "flag: x\ndefault: off\nrule: env >= staging -> on\n"
+        with self.assertRaises(FlagFileError) as ctx:
+            parse(text, source_name="test.flags")
+        self.assertEqual(ctx.exception.line, 3)
+        self.assertIn("only works with numeric values", ctx.exception.message)
+
 
 if __name__ == "__main__":
     unittest.main()

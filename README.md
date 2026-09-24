@@ -42,6 +42,20 @@ rule: user.plan == enterprise and (env == staging or env == canary) -> on
 `a == 1 or b == 2 and c == 3` reads as `a == 1 or (b == 2 and c == 3)`.
 Use parentheses when you mean something else.
 
+A comparison value can be a bare word, a quoted string, a number, or
+`true`/`false`. Numbers and booleans are compared as their own type, not
+as text, and the context value on the command line is coerced to match:
+
+```
+rule: user.signup_days >= 30 -> on
+rule: error_rate < 0.5 -> on
+rule: user.beta == true -> off
+```
+
+`==` and `!=` work with any value type. `>`, `<`, `>=`, and `<=` only
+make sense for numbers, so using one with a non-numeric value is a parse
+error rather than a rule that silently never matches.
+
 ## Usage
 
 ```
@@ -73,9 +87,9 @@ offending line and a caret pointing at the exact character.
 ## Status
 
 This is a first pass: the parser and the `why` command work end to end.
-The rule language now supports `and`/`or` grouping but is still small
-(string equality only, no numeric or boolean comparisons, no negation).
-See the roadmap for what's next.
+The rule language supports `and`/`or` grouping, parentheses, and
+comparisons over strings, numbers, and booleans (`==`, `!=`, `>`, `<`,
+`>=`, `<=`). There's no negation yet. See the roadmap for what's next.
 
 ## Development
 

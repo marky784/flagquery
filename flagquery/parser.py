@@ -35,19 +35,56 @@ class FlagFileError(Exception):
         return self._format()
 
 
+def _as_bool(actual: str) -> Optional[bool]:
+    if actual == "true":
+        return True
+    if actual == "false":
+        return False
+    return None
+
+
+def _as_number(actual: str) -> Optional[float]:
+    try:
+        return float(actual)
+    except ValueError:
+        return None
+
+
 @dataclass
 class Comparison:
     key: str
     op: str
-    value: str
+    value: Union[str, float, bool]
 
     def evaluate(self, context: dict) -> bool:
         actual = context.get(self.key)
         if actual is None:
             return False
+
+        # The context always arrives as strings (it comes from --context
+        # KEY=VALUE on the command line), so coerce it to match whatever
+        # type the rule's literal parsed as before comparing.
+        if isinstance(self.value, bool):
+            coerced = _as_bool(actual)
+        elif isinstance(self.value, (int, float)):
+            coerced = _as_number(actual)
+        else:
+            coerced = actual
+
+        if coerced is None:
+            return False
+
         if self.op == "==":
-            return actual == self.value
-        return actual != self.value
+            return coerced == self.value
+        if self.op == "!=":
+            return coerced != self.value
+        if self.op == ">":
+            return coerced > self.value
+        if self.op == "<":
+            return coerced < self.value
+        if self.op == ">=":
+            return coerced >= self.value
+        return coerced <= self.value
 
 
 @dataclass
@@ -82,18 +119,26 @@ class Flag:
 
 # A rule expression looks like:
 #   user.plan == "enterprise" and (env == staging or env == canary) -> on
+#   user.signup_days >= 30 -> on
 # 'and' and 'or' are ordinary WORD tokens; the parser treats those two
 # spellings as keywords wherever a field name or value is not expected.
+# 'true' and 'false' are ordinary WORD tokens too, but a value position
+# turns them into real booleans instead of the strings "true"/"false".
 _TOKEN_RE = re.compile(
     r"""
       (?P<WS>\s+)
     | (?P<ARROW>->)
     | (?P<EQ>==)
     | (?P<NE>!=)
+    | (?P<GE>>=)
+    | (?P<LE><=)
+    | (?P<GT>>)
+    | (?P<LT><)
     | (?P<SINGLE_EQ>=)
     | (?P<LPAREN>\()
     | (?P<RPAREN>\))
     | (?P<STRING>"[^"]*")
+    | (?P<NUMBER>-?\d+(?:\.\d+)?)
     | (?P<WORD>[A-Za-z_][A-Za-z0-9_.-]*)
     | (?P<INVALID>.)
     """,
@@ -157,21 +202,38 @@ def _parse_rule_expr(expr: str, line_no: int, base_col: int, raw_line: str, sour
 
         tok = peek()
         if tok is None:
-            fail("expected '==' or '!=' after the field name", col_after_last())
+            fail("expected a comparison operator after the field name", col_after_last())
         kind, text, col = tok
-        if kind not in ("EQ", "NE"):
-            fail(f"expected '==' or '!=' after the field name, found {text!r}", col)
+        if kind not in ("EQ", "NE", "GT", "LT", "GE", "LE"):
+            fail(
+                f"expected a comparison operator (==, !=, >, <, >=, <=) after the field name, "
+                f"found {text!r}",
+                col,
+            )
         op = text
         pos += 1
 
         tok = peek()
         if tok is None:
             fail("expected a value after the comparison", col_after_last())
-        kind, text, col = tok
-        if kind not in ("WORD", "STRING") or (kind == "WORD" and text in _KEYWORDS):
-            fail(f"expected a value after the comparison, found {text!r}", col)
-        value = text[1:-1] if kind == "STRING" else text
+        kind, text, value_col = tok
+        value: Union[str, float, bool]
+        if kind == "STRING":
+            value = text[1:-1]
+        elif kind == "NUMBER":
+            value = float(text) if "." in text else int(text)
+        elif kind == "WORD" and text not in _KEYWORDS:
+            value = {"true": True, "false": False}.get(text, text)
+        else:
+            fail(f"expected a value after the comparison, found {text!r}", value_col)
         pos += 1
+
+        is_numeric = isinstance(value, (int, float)) and not isinstance(value, bool)
+        if op in (">", "<", ">=", "<=") and not is_numeric:
+            fail(
+                f"the {op!r} operator only works with numeric values, found {text!r}",
+                value_col,
+            )
 
         return Comparison(key=key, op=op, value=value)
 
