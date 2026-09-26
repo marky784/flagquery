@@ -68,6 +68,17 @@ checkout_v2 is off
   no rule matched, used the default from flags.txt:2
 ```
 
+To check a flags file without evaluating anything, use `validate`. This is
+useful in CI, or before you trust a file someone else edited by hand:
+
+```
+$ python -m flagquery validate flags.txt
+flags.txt: ok, 2 flags, 3 rules
+```
+
+It exits non-zero and prints the same line/column error as `why` if the
+file is malformed.
+
 ## Why the errors matter
 
 The whole point of this tool is to be trustworthy about a config file

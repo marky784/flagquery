@@ -53,6 +53,23 @@ def cmd_why(args) -> int:
     return 0
 
 
+def cmd_validate(args) -> int:
+    try:
+        flags = parse_file(args.file)
+    except FlagFileError as exc:
+        print(exc, file=sys.stderr)
+        return 1
+    except OSError as exc:
+        print(f"error: could not read {args.file}: {exc.strerror}", file=sys.stderr)
+        return 1
+
+    rule_count = sum(len(flag.rules) for flag in flags.values())
+    flag_word = "flag" if len(flags) == 1 else "flags"
+    rule_word = "rule" if rule_count == 1 else "rules"
+    print(f"{args.file}: ok, {len(flags)} {flag_word}, {rule_count} {rule_word}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="flagquery",
@@ -73,6 +90,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="a context value used to evaluate rules, e.g. --context env=staging",
     )
     why.set_defaults(func=cmd_why)
+
+    validate = sub.add_parser(
+        "validate", help="check a flags file for errors without evaluating anything"
+    )
+    validate.add_argument("file", help="path to a flags file")
+    validate.set_defaults(func=cmd_validate)
 
     return parser
 
